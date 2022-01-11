@@ -3,7 +3,6 @@ const validator = require('validator');
 const bcrypt = require('bcryptjs');
 const { toJSON, paginate } = require('./plugins');
 const { roles } = require('../config/roles');
-const { date } = require('faker');
 
 const userSchema = mongoose.Schema(
   {
@@ -20,7 +19,7 @@ const userSchema = mongoose.Schema(
       type: String,
       default: 'abc',
     },
-    lastLogin:{
+    lastLogin: {
       type: Date,
       default: Date.now,
     },
@@ -33,7 +32,7 @@ const userSchema = mongoose.Schema(
       required: true,
       trim: true,
       minlength: 6,
-      private: true, 
+      private: true,
     },
     email: {
       type: String,

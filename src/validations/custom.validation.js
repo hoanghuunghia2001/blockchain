@@ -22,7 +22,6 @@ const ownerId = (value, helpers) => {
   return value;
 };
 
-
 module.exports = {
   objectId,
   password,
