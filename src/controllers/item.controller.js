@@ -22,10 +22,9 @@ const getItemByAccount = catchAsync(async (req, res) => {
 });
 
 const updateItemByAccount = catchAsync(async (req, res) => {
-  const item = await itemService.updateItemByAccount(req.params.ownerId, req.body);
+  const item = await itemService.updateItemByAccount(req.params.itemId, req.body);
   res.send(item);
 });
-
 
 module.exports = {
   createItem,

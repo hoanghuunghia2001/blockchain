@@ -11,7 +11,7 @@ router
   .get(validate(itemValidation.getItems), itemController.getAllItem);
 
 router
-  .route('/:ownerId')
+  .route('/:itemId')
   .get(validate(itemValidation.getItem), itemController.getItemByAccount)
   .patch(validate(itemValidation.updateItem), itemController.updateItemByAccount)
 

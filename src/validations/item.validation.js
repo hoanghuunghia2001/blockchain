@@ -1,17 +1,14 @@
 const Joi = require('joi');
-// const { objectId, ownerId } = require('./custom.validation');
+const { objectId } = require('./custom.validation');
 
 const createItem = {
   body: Joi.object().keys({
     ownerId: Joi.string().required(),
     itemAddress: Joi.string().required(),
     identify: Joi.string().required().max(128),
-    state: Joi.number().required().min(0).max(2),
-    price: Joi.number().required(),
+    price: Joi.number().unsafe().required(),
     images: Joi.array().required().max(8),
     description: Joi.string().required().max(255),
-    status: Joi.object().required(),
-    _destroy: Joi.boolean().required(),
   }),
 };
 
@@ -37,7 +34,7 @@ const getItem = {
 
 const updateItem = {
   params: Joi.object().keys({
-    ownerId: Joi.string(),
+    itemId: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object()
     .keys({
@@ -45,9 +42,14 @@ const updateItem = {
       state: Joi.number().min(0).max(2),
       images: Joi.array().max(8),
       description: Joi.string().max(255),
-      status: Joi.object(),
     })
     .min(1),
+};
+
+const deleteItem = {
+  params: Joi.object().keys({
+    itemId: Joi.string().custom(objectId),
+  }),
 };
 
 module.exports = {
@@ -55,4 +57,5 @@ module.exports = {
   getItems,
   getItem,
   updateItem,
+  deleteItem,
 };
