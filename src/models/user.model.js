@@ -8,6 +8,7 @@ const userSchema = mongoose.Schema(
   {
     account: {
       type: String,
+      minlength: 6,
     },
     fullName: {
       type: String,
@@ -17,7 +18,7 @@ const userSchema = mongoose.Schema(
     },
     avatar: {
       type: String,
-      default: 'abc',
+      default: 'https://www.w3schools.com/howto/img_avatar.png',
     },
     lastLogin: {
       type: Date,

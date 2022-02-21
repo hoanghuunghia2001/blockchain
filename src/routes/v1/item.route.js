@@ -10,10 +10,16 @@ router
   .post(validate(itemValidation.createItem), itemController.createItem)
   .get(validate(itemValidation.getItems), itemController.getAllItem);
 
+router.route('/encrypt').post(validate(itemValidation.generateHashString), itemController.generateHashString);
+router.route('/decrypt').post(validate(itemValidation.decryptHashedString), itemController.decodeHashedString);
+
 router
   .route('/:itemId')
-  .get(validate(itemValidation.getItem), itemController.getItemByAccount)
-  .patch(validate(itemValidation.updateItem), itemController.updateItemByAccount)
+  .get(itemController.getItemById)
+  .put(validate(itemValidation.updateItemState), itemController.updateItemState)
+  .patch(validate(itemValidation.updateItemInfo), itemController.updateItemInfo);
+
+router.route('/owner/:ownerId').get(validate(itemValidation.getItem), itemController.getItemByOwnerId);
 
 module.exports = router;
 

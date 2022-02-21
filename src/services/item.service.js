@@ -2,21 +2,28 @@
 const httpStatus = require('http-status');
 const { Item } = require('../models');
 const ApiError = require('../utils/ApiError');
-const hashRequestBody = require('../utils/hashRequestBody');
-
+const { encryptRequestBody, decryptHashedString } = require('../utils/hashRequestBody');
 /**
  * Create a Item
  * @param {Object} userBody
  * @returns {Promise<Item>}
  */
 const createItem = async (itemBody) => {
-  const hashedString = hashRequestBody(itemBody.identify, itemBody.description, itemBody.images);
-  itemBody.history = [hashedString];
+  if (await Item.isItemAddressTaken(itemBody.itemAddress)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Item address đã tồn tại!');
+  }
   return Item.create(itemBody);
 };
 
-const queryItems = async () => {
-  const results = await Item.find({ state: { $ne: 2 } });
+const queryFilterItems = async (query) => {
+  const results = await Item.find({ state: { $eq: 0 }, ...query });
+
+  return results;
+};
+
+const queryItems = async (filter, options) => {
+  // const results = await Item.find({ state: { $ne: 2 } });
+  const results = await Item.paginate(filter, options);
   return results;
 };
 
@@ -24,8 +31,33 @@ const getAllItemById = async (id) => {
   return Item.findById(id);
 };
 
-const getItemByAccount = async (ownerId) => {
-  return Item.findOne({ ownerId });
+// const getItemById = async (id) => {
+// return Item.findById(id);
+// };
+
+const getItemByOwnerId = async (reqOwnerId) => {
+  const total = await Item.aggregate([
+    {
+      $match: {
+        ownerId: reqOwnerId,
+      },
+    },
+    {
+      $group: {
+        _id: '$ownerId',
+        totalAmount: { $sum: '$price' },
+      },
+    },
+  ]);
+  // console.log('total = ', total);
+  const allItems = await Item.find({ ownerId: reqOwnerId });
+
+  return {
+    infos: {
+      totalPrice: total,
+    },
+    items: allItems,
+  };
 };
 
 const getItemById = async (itemId) => {
@@ -33,12 +65,12 @@ const getItemById = async (itemId) => {
 };
 
 const checkStateChange = (oldState, newState) => {
-  if (oldState === 2) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'This item was deliveried!');
-  }
-
   if (newState === oldState) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Nothing change to update!');
+  }
+
+  if (oldState === 2) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'This item was deliveried!');
   }
 
   if (newState < oldState) {
@@ -50,79 +82,59 @@ const checkStateChange = (oldState, newState) => {
   }
 
   if (newState === oldState + 2) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Cannot skip 2 step!');
+    throw new ApiError(httpStatus.NOT_FOUND, `Max state you can update is ${oldState + 1}`);
   }
 
   return oldState + 1;
 };
 
-const updateItemByAccount = async (itemId, updateBody) => {
+const updateItemState = async (itemId, state) => {
   const item = await getItemById(itemId);
   if (!item) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Item not found');
   }
 
   // CHECK IS VALID STATE?
-  const newState = checkStateChange(item.state, updateBody.state);
+  const newState = checkStateChange(item.state, state);
 
-  // ONLY CHANGE STATE
-  if (!updateBody.identify && !updateBody.description && !updateBody.images && updateBody.state) {
-    console.log('ONLY CHANGE STATE');
-    const returnValue = await Item.findOneAndUpdate(
-      { _id: itemId },
-      { state: newState },
-      { new: true, useFindAndModify: false }
-    );
-    return returnValue;
+  const returnValue = await Item.findOneAndUpdate(
+    { _id: itemId },
+    { state: newState },
+    { new: true, useFindAndModify: false }
+  );
+  return returnValue;
+};
+
+const updateItemInfo = async (itemId, updateBody) => {
+  const item = await getItemById(itemId);
+  if (!item) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Item not found');
   }
 
-  // CASE: ONLY UPDATE INFOS
-  if (
-    (updateBody.identify || updateBody.description || updateBody.images) &&
-    (!updateBody.state || updateBody.state === item.state)
-  ) {
-    console.log('ONLY UPDATE INFOS');
-    // GENERATE NEW HASH STRING
-    const hashedString = hashRequestBody(
-      updateBody.identify || item.identify,
-      updateBody.description || item.description,
-      updateBody.images || item.images
-    );
-    // CHECK HISTORY LAST STRING DUPLICATE
-    if (item.history.slice(-1)[0] === hashedString) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Nothing change to update!');
-    }
-    const returnValue = await Item.findOneAndUpdate(
-      { _id: itemId },
-      {
-        identify: updateBody.identify,
-        description: updateBody.description,
-        images: updateBody.images,
-        $push: { history: hashedString },
-      },
-      { new: true, useFindAndModify: false }
-    );
-    return returnValue;
-  }
-
-  console.log('UPDATE ALL');
-  // GENERATE NEW HASH STRING
-  const hashedString = hashRequestBody(
+  const hashedString = encryptRequestBody(
     updateBody.identify || item.identify,
     updateBody.description || item.description,
     updateBody.images || item.images
   );
   // CHECK HISTORY LAST STRING DUPLICATE
-  if (item.history.slice(-1)[0] === hashedString) {
+  const lastState = JSON.stringify(decryptHashedString(item.history.slice(-1)[0]));
+  const newStateToUpdate = JSON.stringify({
+    identify: updateBody.identify,
+    description: updateBody.description,
+    images: updateBody.images,
+  });
+
+  // CHECK IF ANYTHING CHANGE IN THIS REQUEST
+  if (lastState === newStateToUpdate) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Nothing change to update!');
   }
+
   const returnValue = await Item.findOneAndUpdate(
     { _id: itemId },
     {
       identify: updateBody.identify,
       description: updateBody.description,
       images: updateBody.images,
-      state: newState,
       $push: { history: hashedString },
     },
     { new: true, useFindAndModify: false }
@@ -134,6 +146,9 @@ module.exports = {
   createItem,
   queryItems,
   getAllItemById,
-  getItemByAccount,
-  updateItemByAccount,
+  getItemById,
+  getItemByOwnerId,
+  updateItemState,
+  updateItemInfo,
+  queryFilterItems,
 };
